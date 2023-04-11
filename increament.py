@@ -1,7 +1,7 @@
 import pandas as pd
 
 # Read the CSV file
-data = pd.read_csv('/Users/ziyuanye/Documents/PSU/2023 Spring/DS 340W/Final Project/sentiment.csv', delimiter=";")
+data = pd.read_csv('sentiment.csv', delimiter=";")
 
 # Filter rows where Label is 1 and Lan is 'EN'
 filtered_data_1 = data[(data['label'] == 1) & (data['lan'] == 'EN')]
