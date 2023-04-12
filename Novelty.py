@@ -5,6 +5,9 @@ import numpy as np
 import tensorflow as tf
 from tensorflow.keras.preprocessing.text import Tokenizer
 from tensorflow.keras.preprocessing.sequence import pad_sequences
+from tensorflow.keras.regularizers import l2
+from tensorflow.keras.layers import Embedding, Bidirectional, LSTM, Dense, Dropout, BatchNormalization
+from tensorflow.keras.callbacks import EarlyStopping
 from sklearn.model_selection import train_test_split
 from googleapiclient.discovery import build
 import googleapiclient.discovery
@@ -19,6 +22,10 @@ import nltk
 from nltk.corpus import stopwords
 from nltk.stem import WordNetLemmatizer
 from nltk.tokenize import word_tokenize
+import matplotlib.pyplot as plt
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
+
+import pickle
 
 # YouTube API key
 API_KEY = 'AIzaSyC8Y7glTka8H9WqymYDKTN190EoJUFlqWU'  # Enter your API key here
@@ -114,12 +121,15 @@ def preprocess_text(text):
 
 def create_model(vocab_size, embedding_dim, max_length):
     model = tf.keras.Sequential([
-        tf.keras.layers.Embedding(vocab_size, embedding_dim, input_length=max_length),
-        tf.keras.layers.Bidirectional(tf.keras.layers.LSTM(64, return_sequences=True)),
-        tf.keras.layers.Bidirectional(tf.keras.layers.LSTM(32)),
-        tf.keras.layers.Dense(64, activation='relu'),
-        tf.keras.layers.Dropout(0.5),
-        tf.keras.layers.Dense(3, activation='softmax')
+        Embedding(vocab_size, embedding_dim, input_length=max_length),
+        Dropout(0.65),
+        Bidirectional(LSTM(64, return_sequences=True, dropout=0.5, recurrent_dropout=0.5)),
+        BatchNormalization(),
+        Bidirectional(LSTM(32, dropout=0.5, recurrent_dropout=0.5)),
+        BatchNormalization(),
+        Dense(64, activation='relu', kernel_regularizer=l2(0.001)),
+        Dropout(0.65),
+        Dense(3, activation='softmax')
     ])
     model.compile(loss='sparse_categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
     return model
@@ -215,15 +225,57 @@ def train_and_save_model():
     X_train, X_test, y_train, y_test, tokenizer, max_length = prepare_data(csv_file_path)
     vocab_size = len(tokenizer.word_index) + 1
     embedding_dim = 100
+
     model = create_model(vocab_size, embedding_dim, max_length)
-    history = model.fit(X_train, y_train, epochs=10, validation_data=(X_test, y_test))
-    for epoch in range(len(history.history['accuracy'])):
-        train_acc = history.history['accuracy'][epoch]
-        val_acc = history.history['val_accuracy'][epoch]
-        print(f"Epoch {epoch + 1}: Train accuracy = {train_acc:.4f}, Validation accuracy = {val_acc:.4f}")
+    early_stopping = EarlyStopping(monitor='val_loss', patience=3, restore_best_weights=True)
+    history = model.fit(X_train, y_train, epochs=10, validation_data=(X_test, y_test), callbacks=[early_stopping])
+    with open('training_history.pkl', 'wb') as file:
+        pickle.dump(history.history, file)
 
     # Save the trained model
     model.save('sentiment_analysis_model.h5')
+
+
+def plot_training_performance(app, history):
+    plot_window = tk.Toplevel(app)
+    plot_window.title("Training Performance")
+
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(8, 6))
+    fig.tight_layout(pad=3.0)
+
+    # Plotting the training accuracy
+    ax1.plot(history['accuracy'], label='Training Accuracy')
+    ax1.plot(history['val_accuracy'], label='Validation Accuracy')
+    ax1.set_title('Model Accuracy')
+    ax1.set_xlabel('Epoch')
+    ax1.set_ylabel('Accuracy')
+    ax1.legend(loc='lower right')
+
+    # Plotting the training loss
+    ax2.plot(history['loss'], label='Training Loss')
+    ax2.plot(history['val_loss'], label='Validation Loss')
+    ax2.set_title('Model Loss')
+    ax2.set_xlabel('Epoch')
+    ax2.set_ylabel('Loss')
+    ax2.legend(loc='upper right')
+
+    # Displaying the plot
+    canvas = FigureCanvasTkAgg(fig, master=plot_window)
+    canvas.draw()
+    canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+
+    toolbar = NavigationToolbar2Tk(canvas, plot_window)
+    toolbar.update()
+    canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+
+
+def load_and_plot_history(app):
+    try:
+        with open('training_history.pkl', 'rb') as file:
+            loaded_history = pickle.load(file)
+            plot_training_performance(app, loaded_history)
+    except FileNotFoundError:
+        messagebox.showerror("Error", "Training history not found. Train the model first.")
 
 
 def main():
@@ -258,6 +310,10 @@ def main():
 
     result_label = ttk.Label(app, text="Sentiment Analysis Results:")
     result_label.grid(column=0, row=3, padx=10, pady=10, sticky=tk.W)
+
+    # Add a button to load and plot the training history
+    load_history_button = ttk.Button(app, text="Load Training History", command=lambda: load_and_plot_history(app))
+    load_history_button.grid(column=1, row=7, padx=10, pady=10, sticky=tk.W)
 
     # Create Treeview widget
     result_treeview = ttk.Treeview(app, columns=("comment", "sentiment"), show="headings")
