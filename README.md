@@ -16,13 +16,10 @@ This project focuses on analyzing the sentiment of YouTube video comments. The g
   - **comment**: The actual text of the comment.
   - **label**: The sentiment label (0 for negative, 1 for neutral, 2 for positive).
 
-## Project Structure
+## Model Usages
 
-```bash
-├── data/                    # Folder for storing the CSV dataset
-├── sentiment_analysis_model.h5   # Saved Keras model after training
-├── training_history.pkl      # Training history for performance analysis
-├── src/                     # Python source files
-    ├── sentiment_analysis.py   # Main script for model training and sentiment analysis
-├── README.md                # Project documentation
-└── requirements.txt         # Dependencies for the project
+- Bidirectional LSTM with Embedding Layer: The sentiment analysis model uses an Embedding layer followed by two Bidirectional LSTM layers and two Dense layers. It outputs a softmax classification into three categories (negative, neutral, positive).
+
+- Tokenization and Padding: The comments are tokenized and padded to ensure consistent input length before feeding into the LSTM model.
+
+
